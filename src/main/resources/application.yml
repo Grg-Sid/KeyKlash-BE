@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name:
+      multi-typer
+
+  security:
+    user:
+      name: admin
+      password: admin
+
+logging:
+  level:
+    com.type: DEBUG
+    org.springframework.web.socket: DEBUG
+    org.springframework.security: DEBUG
+
+
+#logging.level.org.springframework.security=DEBUG
