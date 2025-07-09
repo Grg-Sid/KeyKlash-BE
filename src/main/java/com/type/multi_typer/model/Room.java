@@ -10,6 +10,7 @@ public class Room {
     private String code;
     private GameState gameState;
     private String text;
+    private Player createdBy;
     private List<Player> players;
     private LocalDateTime createdAt;
     private LocalDateTime gameStartedAt;
@@ -21,14 +22,17 @@ public class Room {
         this.players = new ArrayList<>();
     }
 
-    public Room(String id, String code, String text) {
+    public Room(String id, String code, String text, int maxPlayers, String creatorName) {
         this.id = id;
         this.code = code;
         this.text = text;
         this.gameState = GameState.WAITING;
         this.players = new ArrayList<>();
         this.createdAt = LocalDateTime.now();
-        this.maxPlayers = 5;
+        this.maxPlayers = maxPlayers;
+        this.createdBy = new Player(creatorName, id);
+        System.out.println(this.createdBy.getNickname());
+        addPlayer(this.createdBy);
     }
 
     public void addPlayer(Player player) {
@@ -124,5 +128,13 @@ public class Room {
 
     public void setMaxPlayers(int maxPlayers) {
         this.maxPlayers = maxPlayers;
+    }
+
+    public Player getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Player createdBy) {
+        this.createdBy = createdBy;
     }
 }

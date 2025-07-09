@@ -1,6 +1,9 @@
 server:
   port: 8080
 
+frontend:
+  origin: http://localhost:5173
+
 spring:
   application:
     name:

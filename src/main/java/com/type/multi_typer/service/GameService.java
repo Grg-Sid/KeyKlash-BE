@@ -20,12 +20,12 @@ public class GameService {
     private final Map<String, String> roomCodes = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
-    public Room createRoom(int maxPlayer) {
-        String roomId = UUID.randomUUID().toString();
+    public Room createRoom(int maxPlayer, String creatorName) {
+        String roomId = UUID.randomUUID().toString().substring(0, 6);
         String roomCode = generateRoomCode();
         String text = generateRandomQuote();
 
-        Room room = new Room(roomId, roomCode, text);
+        Room room = new Room(roomId, roomCode, text, maxPlayer, creatorName);
         rooms.put(roomId, room);
         roomCodes.put(roomCode, roomId);
         return room;
