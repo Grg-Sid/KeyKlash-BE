@@ -10,6 +10,7 @@ public class Player {
     private int currentPosition;
     private int wpm;
     private double accuracy;
+    private boolean ready;
     private boolean finished;
     private LocalDateTime joinedAt;
     private LocalDateTime finishedAt;
@@ -30,6 +31,7 @@ public class Player {
         this.accuracy = 0.0;
         this.finished = false;
         this.joinedAt = LocalDateTime.now();
+        this.ready = false;
     }
 
     public String getId() {
@@ -110,5 +112,13 @@ public class Player {
 
     public void setSessionId(String sessionId) {
         this.sessionId = sessionId;
+    }
+
+    public boolean getReady() {
+        return ready;
+    }
+
+    public void setReady(boolean ready) {
+        this.ready = ready;
     }
 }

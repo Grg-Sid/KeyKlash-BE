@@ -5,6 +5,8 @@ import com.type.multi_typer.dto.MessageType;
 import com.type.multi_typer.dto.TypingUpdate;
 import com.type.multi_typer.model.Room;
 import com.type.multi_typer.service.GameService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -14,59 +16,47 @@ import org.springframework.stereotype.Controller;
 @Controller
 public class GameWebSocketController {
 
+    private static final Logger log = LoggerFactory.getLogger(GameWebSocketController.class);
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     private GameService gameService;
 
-    @MessageMapping("/typing-update")
+    @MessageMapping("/game/progress")
     public void handleTypingUpdate(@Payload TypingUpdate typingUpdate) {
-        try {
-            Room room = gameService.getRoom(typingUpdate.getRoomId());
-            if (room != null) {
-                gameService.updatePlayerProgress(room.getId(), typingUpdate.getPlayerId(), typingUpdate);
+        // Update the state in service.
+        gameService.updatePlayerProgress(typingUpdate.getRoomId(), typingUpdate.getPlayerId(), typingUpdate);
 
-                GameMessage gameMessage = new GameMessage(MessageType.TYPING_UPDATE, room, room.getId(), typingUpdate.getPlayerId());
-                messagingTemplate.convertAndSend("/topic/room/" + room.getId() , gameMessage);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        // Get the new complete state
+        Room updatedRoom = gameService.getRoom(typingUpdate.getRoomId());
+
+        // Broadcast it
+        if (updatedRoom != null) {
+            GameMessage gameMessage = new GameMessage(MessageType.ROOM_UPDATE, updatedRoom, updatedRoom.getId(), typingUpdate.getPlayerId());
+            messagingTemplate.convertAndSend("/topic/room/" + updatedRoom.getId(), gameMessage);
         }
     }
 
-    @MessageMapping("/join-room")
-    public void handleJoinRoom(@Payload GameMessage gameMessage) {
-        try {
-            GameMessage response = new GameMessage(MessageType.PLAYER_JOINED, gameMessage.getPayload(), gameMessage.getRoomId(), gameMessage.getPlayerId());
-            messagingTemplate.convertAndSend("/topic/room/" + gameMessage.getRoomId(), response);
-        } catch (Exception e) {
-            e.printStackTrace();
+    @MessageMapping("/game/start")
+    public void handleGameStart(@Payload GameMessage gameMessage) {
+        // Call service method
+        gameService.startGame(gameMessage.getRoomId());
+
+        // Get new state
+        Room updatedRoom = gameService.getRoom(gameMessage.getRoomId());
+
+        // Broadcast it
+        if (updatedRoom != null) {
+            GameMessage response = new GameMessage(MessageType.GAME_STARTED, updatedRoom, updatedRoom.getId(), gameMessage.getPlayerId());
+            messagingTemplate.convertAndSend("/topic/room/" + updatedRoom.getId(), response);
         }
     }
 
-    @MessageMapping("/leave-room")
-    public void handleLeaveRoom(@Payload GameMessage gameMessage) {
-        try {
-            gameService.leaveRoom(gameMessage.getRoomId(), gameMessage.getPlayerId());
+    @MessageMapping("/game/ready")
+    public void handleGameReady(@Payload GameMessage readyMessage) {
+        gameService.playerReady(readyMessage.getRoomId(), readyMessage.getPlayerId());
+        Room updatedRoom = gameService.getRoom(readyMessage.getRoomId());
 
-            GameMessage response = new GameMessage(MessageType.PLAYER_LEFT, gameMessage.getPayload(), gameMessage.getRoomId(), gameMessage.getPlayerId());
-            messagingTemplate.convertAndSend("/topic/room/" + gameMessage.getRoomId(), response);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @MessageMapping("/start-game")
-    public void handleStartGame(@Payload GameMessage gameMessage) {
-        try {
-            gameService.startGame(gameMessage.getRoomId());
-            Room room = gameService.getRoom(gameMessage.getRoomId());
-
-            GameMessage response = new GameMessage(MessageType.GAME_STARTED, room, gameMessage.getPlayerId(), gameMessage.getRoomId());
-            messagingTemplate.convertAndSend("/topic/room/" + gameMessage.getRoomId(), response);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 }

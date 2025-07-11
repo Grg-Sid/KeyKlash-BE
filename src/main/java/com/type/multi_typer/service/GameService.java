@@ -1,13 +1,18 @@
 package com.type.multi_typer.service;
 
+import com.type.multi_typer.dto.GameMessage;
+import com.type.multi_typer.dto.MessageType;
 import com.type.multi_typer.dto.QuoteResponse;
 import com.type.multi_typer.dto.TypingUpdate;
 import com.type.multi_typer.model.GameState;
 import com.type.multi_typer.model.Player;
 import com.type.multi_typer.model.Room;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.sql.SQLOutput;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -20,6 +25,9 @@ public class GameService {
     private final Map<String, String> roomCodes = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
     public Room createRoom(int maxPlayer, String creatorName) {
         String roomId = UUID.randomUUID().toString().substring(0, 6);
         String roomCode = generateRoomCode();
@@ -31,7 +39,7 @@ public class GameService {
         return room;
     }
 
-    public Room joinRoom(String roomCode, String nickname) {
+    public Player joinRoom(String roomCode, String nickname) {
         String roomId = roomCodes.get(roomCode.toUpperCase());
         if (roomId == null) {
             throw new IllegalArgumentException("Room code " + roomCode + " not found");
@@ -51,7 +59,27 @@ public class GameService {
         Player newPlayer = new Player(nickname, roomId);
         room.addPlayer(newPlayer);
 
-        return room;
+        broadcastRoomUpdate(room);
+        return newPlayer;
+    }
+
+    public void playerReady(String roomCode, String playerId) {
+        Room room = rooms.get(roomCode);
+        if (room == null) {
+            throw new IllegalArgumentException("Room code " + roomCode + " not found");
+        }
+
+        Player player = room.getPlayer(playerId);
+        if (player == null) {
+            throw new IllegalArgumentException("Player ID " + playerId + " not found");
+        }
+
+        player.setReady(true);
+
+        // Check if all players are ready
+        if (room.getPlayers().stream().allMatch(Player::getReady)) {
+            startGame(room.getId());
+        }
     }
 
     public Room getRoom(String roomId) {
@@ -72,6 +100,8 @@ public class GameService {
                 rooms.remove(roomId);
                 roomCodes.remove(room.getCode());
             }
+
+            broadcastRoomUpdate(room);
         }
     }
 
@@ -80,6 +110,8 @@ public class GameService {
         if (room != null && room.canStart()) {
             room.setGameState(GameState.IN_PROGRESS);
             room.setGameStartedAt(LocalDateTime.now());
+            GameMessage message = new GameMessage(MessageType.GAME_STARTED, room, room.getId(), null);
+            messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
         }
     }
 
@@ -167,5 +199,13 @@ public class GameService {
             System.out.println(e.getMessage());
         }
         return quote;
+    }
+
+    public void broadcastRoomUpdate(Room room) {
+        if (room == null) return;
+
+        GameMessage message = new GameMessage(MessageType.ROOM_UPDATE, room, room.getId(), null);
+        messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
+        System.out.println("Broadcasted update for room " + room.getId());
     }
 }
