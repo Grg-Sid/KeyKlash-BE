@@ -1,12 +1,12 @@
 package com.type.multi_typer.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.type.multi_typer.dto.RoomCreateRequest;
 import com.type.multi_typer.dto.RoomJoinRequest;
 import com.type.multi_typer.model.Player;
 import com.type.multi_typer.model.Room;
 import com.type.multi_typer.service.GameService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +16,8 @@ import java.util.List;
 @RequestMapping("/api")
 public class GameController {
 
+    private final Logger logger = LoggerFactory.getLogger(GameController.class);
+
     private final GameService gameService;
 
     public GameController(GameService gameService) {
@@ -24,7 +26,6 @@ public class GameController {
 
     @GetMapping("/hello-world")
     public ResponseEntity<String> helloWorld() {
-        System.out.println("hello-world");
         return ResponseEntity.ok("Hello World");
     }
 
@@ -51,7 +52,7 @@ public class GameController {
             Player newPlayer = gameService.joinRoom(request.getRoomCode(), request.getNickname());
             return ResponseEntity.ok(newPlayer);
         } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
+            logger.error("Exception occurred while joining room", e);
             return ResponseEntity.badRequest().body(null);
         }
     }
@@ -80,7 +81,7 @@ public class GameController {
             gameService.playerReady(roomCode, playerId);
             return ResponseEntity.ok("Player ready");
         } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
+            logger.error("Exception occurred while marking player", e);
             return ResponseEntity.badRequest().build();
         }
     }

@@ -6,9 +6,9 @@ public class RoomJoinRequest {
 
     public RoomJoinRequest() {}
 
-    public RoomJoinRequest(String nickname, String roomCode) {
-        this.nickname = nickname;
+    public RoomJoinRequest(String roomCode, String nickname) {
         this.roomCode = roomCode;
+        this.nickname = nickname;
     }
 
     public String getNickname() {

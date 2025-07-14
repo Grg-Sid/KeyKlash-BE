@@ -1,20 +1,18 @@
 package com.type.multi_typer.dto;
 
-public class TypingUpdate {
-    private String roomId;
+public class PlayerProgressUpdate {
     private String playerId;
     private int currentPosition;
     private int wpm;
     private double accuracy;
 
-    public TypingUpdate() {}
+    public PlayerProgressUpdate() {}
 
-    public String getRoomId() {
-        return roomId;
-    }
-
-    public void setRoomId(String roomId) {
-        this.roomId = roomId;
+    public PlayerProgressUpdate(String playerId, int currentPosition, int wpm, double accuracy) {
+        this.playerId = playerId;
+        this.currentPosition = currentPosition;
+        this.wpm = wpm;
+        this.accuracy = accuracy;
     }
 
     public String getPlayerId() {

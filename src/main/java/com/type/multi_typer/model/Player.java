@@ -8,6 +8,7 @@ public class Player {
     private String nickname;
     private String roomId;
     private int currentPosition;
+    private String typedString;
     private int wpm;
     private double accuracy;
     private boolean ready;
@@ -32,6 +33,7 @@ public class Player {
         this.finished = false;
         this.joinedAt = LocalDateTime.now();
         this.ready = false;
+        this.typedString = "";
     }
 
     public String getId() {
@@ -120,5 +122,17 @@ public class Player {
 
     public void setReady(boolean ready) {
         this.ready = ready;
+    }
+
+    public String getTypedString() {
+        return typedString;
+    }
+
+    public void setTypedString(String typedString) {
+        this.typedString = typedString;
+    }
+
+    public boolean isReady() {
+        return ready;
     }
 }

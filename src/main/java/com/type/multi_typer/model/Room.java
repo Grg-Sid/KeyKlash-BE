@@ -31,7 +31,6 @@ public class Room {
         this.createdAt = LocalDateTime.now();
         this.maxPlayers = maxPlayers;
         this.createdBy = new Player(creatorName, id);
-        System.out.println(this.createdBy.getNickname());
         addPlayer(this.createdBy);
     }
 

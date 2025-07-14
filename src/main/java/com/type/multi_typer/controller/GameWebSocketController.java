@@ -29,13 +29,18 @@ public class GameWebSocketController {
         gameService.updatePlayerProgress(typingUpdate.getRoomId(), typingUpdate.getPlayerId(), typingUpdate);
 
         // Get the new complete state
-        Room updatedRoom = gameService.getRoom(typingUpdate.getRoomId());
+        GameMessage progressMessage = new GameMessage(
+                MessageType.PLAYER_PROGRESS,
+                typingUpdate,
+                typingUpdate.getRoomId(),
+                typingUpdate.getPlayerId()
+        );
 
         // Broadcast it
-        if (updatedRoom != null) {
-            GameMessage gameMessage = new GameMessage(MessageType.ROOM_UPDATE, updatedRoom, updatedRoom.getId(), typingUpdate.getPlayerId());
-            messagingTemplate.convertAndSend("/topic/room/" + updatedRoom.getId(), gameMessage);
-        }
+        messagingTemplate.convertAndSend("/topic/room/" + typingUpdate.getRoomId(), progressMessage);
+
+
+        //TODO Game Finish Logic
     }
 
     @MessageMapping("/game/start")

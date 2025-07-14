@@ -7,14 +7,14 @@ import com.type.multi_typer.dto.TypingUpdate;
 import com.type.multi_typer.model.GameState;
 import com.type.multi_typer.model.Player;
 import com.type.multi_typer.model.Room;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.sql.SQLOutput;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,6 +24,8 @@ public class GameService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, String> roomCodes = new ConcurrentHashMap<>();
     private final Random random = new Random();
+
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
@@ -40,6 +42,7 @@ public class GameService {
     }
 
     public Player joinRoom(String roomCode, String nickname) {
+        logger.info("Joining room: {}, {}", roomCode, nickname);
         String roomId = roomCodes.get(roomCode.toUpperCase());
         if (roomId == null) {
             throw new IllegalArgumentException("Room code " + roomCode + " not found");
@@ -115,37 +118,44 @@ public class GameService {
         }
     }
 
-    public void updatePlayerProgress(String roomId, String playerId, TypingUpdate update) {
+    public void updatePlayerProgress(String roomId, String playerId, TypingUpdate typingUpdate) {
+//        TODO: might add locks in future
+        //            TODO: Implement redis/db
         Room room = rooms.get(roomId);
-        if (room == null || room.getGameState() != GameState.IN_PROGRESS) {
-            return;
+        if (room == null || room.getPlayers().isEmpty() || room.getGameState() != GameState.IN_PROGRESS) {
+            logger.warn("Room {} is not in progress", roomId);
         }
 
+        assert room != null;
         Player player = room.getPlayer(playerId);
+
         if (player == null) {
+            logger.warn("Player with id {} not found", playerId);
             return;
         }
 
-        String originalText = room.getText();
-        String typedText = update.getTypedText();
-
-        double accuracy = calculateAccuracy(originalText, typedText);
-        int wpm = calculateWPM(typedText, room.getGameStartedAt());
-
-        player.setCurrentPosition(update.getCurrentPosition());
-        player.setAccuracy(accuracy);
-        player.setWpm(wpm);
-
-        if (update.getCurrentPosition() >= originalText.length()) {
-            player.setFinished(true);
-            player.setFinishedAt(LocalDateTime.now());
-
-            boolean allFinished = room.getPlayers().stream().allMatch(Player::isFinished);
-            if (allFinished) {
-                room.setGameState(GameState.FINISHED);
-                room.setGameEndedAt(LocalDateTime.now());
-            }
+        if (typingUpdate.getWpm() > 300) {
+            logger.warn("Player {} has submitted unusually high WPM: {}", playerId, typingUpdate.getWpm());
+            player.setWpm(300);
+        } else {
+            player.setWpm(typingUpdate.getWpm());
         }
+
+        if (typingUpdate.getAccuracy() < 0 || typingUpdate.getAccuracy() > 100) {
+            logger.warn("Player {} has submitted invalid accuracy: {}", playerId, typingUpdate.getAccuracy());
+            player.setAccuracy(100);
+        } else {
+            player.setAccuracy(typingUpdate.getAccuracy());
+        }
+
+        if (typingUpdate.getCurrentPosition() < 0 || typingUpdate.getCurrentPosition() > room.getText().length()) {
+            logger.warn("Player {} has submitted invalid position: {}", playerId, typingUpdate.getCurrentPosition());
+            player.setCurrentPosition(room.getText().length());
+        } else {
+            player.setCurrentPosition(typingUpdate.getCurrentPosition());
+        }
+
+        return;
     }
 
     public List<Room> getAllRooms() {
@@ -163,29 +173,6 @@ public class GameService {
         return sb.toString();
     }
 
-    private double calculateAccuracy(String originalText, String typedText) {
-        if (typedText.isEmpty()) return 100.0;
-
-        int correct = 0;
-        int minLength = Math.min(originalText.length(), typedText.length());
-        for (int i = 0; i < minLength; i++) {
-            if (originalText.charAt(i) == typedText.charAt(i)) {
-                correct++;
-            }
-        }
-
-        return (double) correct / typedText.length();
-    }
-
-    private int calculateWPM(String typedText, LocalDateTime time) {
-        long minutes = ChronoUnit.SECONDS.between(time, LocalDateTime.now()) / 60.0 > 0
-                ? ChronoUnit.SECONDS.between(time, LocalDateTime.now()) / 60
-                : 1;
-
-        int words = typedText.length() / 5;
-        return Math.max(1, (int) (words / Math.max(1, minutes)));
-    }
-
     public String generateRandomQuote() {
         String quote = "Be Impeccable with Your Word. Speak with integrity. Say only what you mean. Avoid using the word to speak against yourself or to gossip about others. Use the power of your word in the direction of truth and love.";
         String url = "https://api.quotable.kurokeita.dev/api/quotes/random?minLength=200&maxLength=400";
@@ -196,7 +183,7 @@ public class GameService {
             }
             quote = quoteResponse.getQuote().getContent();
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            logger.error("Exception occurred while generating quote {}",quote, e);
         }
         return quote;
     }
@@ -206,6 +193,6 @@ public class GameService {
 
         GameMessage message = new GameMessage(MessageType.ROOM_UPDATE, room, room.getId(), null);
         messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
-        System.out.println("Broadcasted update for room " + room.getId());
+        logger.info("Broadcast update for room {}", room.getId());
     }
 }
