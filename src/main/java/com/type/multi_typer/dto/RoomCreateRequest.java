@@ -4,22 +4,14 @@ import jakarta.validation.constraints.NotBlank;
 
 public class RoomCreateRequest {
     @NotBlank
-    private int maxPlayers;
     private String creatorName;
+    private String text;
 
     public RoomCreateRequest() {}
 
-    public RoomCreateRequest(int maxPlayers, String creatorName) {
-        this.maxPlayers = maxPlayers;
+    public RoomCreateRequest(String creatorName, String text) {
         this.creatorName = creatorName;
-    }
-
-    public int getMaxPlayers() {
-        return maxPlayers;
-    }
-
-    public void setMaxPlayers(int maxPlayers) {
-        this.maxPlayers = maxPlayers;
+        this.text = text;
     }
 
     public String getCreatorName() {
@@ -27,5 +19,12 @@ public class RoomCreateRequest {
     }
     public void setCreatorName(String creatorName) {
         this.creatorName = creatorName;
+    }
+
+    public String getText() {
+        return text;
+    }
+    public void setText(String text) {
+        this.text = text;
     }
 }

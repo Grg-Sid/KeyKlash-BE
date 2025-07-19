@@ -2,6 +2,7 @@ package com.type.multi_typer.controller;
 
 import com.type.multi_typer.dto.RoomCreateRequest;
 import com.type.multi_typer.dto.RoomJoinRequest;
+import com.type.multi_typer.dto.RoomRestartRequest;
 import com.type.multi_typer.model.Player;
 import com.type.multi_typer.model.Room;
 import com.type.multi_typer.service.GameService;
@@ -37,11 +38,24 @@ public class GameController {
     @PostMapping("/room/create")
     public ResponseEntity<Room> createRoom(@RequestBody RoomCreateRequest request) {
         try {
-            int maxPlayers = request.getMaxPlayers() > 0 ? request.getMaxPlayers() : 5;
             String creatorName = request.getCreatorName();
-            Room room = gameService.createRoom(maxPlayers, creatorName);
+            String text = request.getText();
+            Room room = gameService.createRoom(creatorName, text);
             return ResponseEntity.ok(room);
         } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/room/restart")
+    public ResponseEntity<Room> restartRoom(@RequestBody RoomRestartRequest request) {
+        try {
+            String roomCode = request.getRoomCode();
+            String newText = request.getNewText();
+            Room room = gameService.restartRoom(roomCode, newText);
+            return ResponseEntity.ok(room);
+        } catch (Exception e) {
+            logger.error("Error restarting room", e);
             return ResponseEntity.badRequest().build();
         }
     }

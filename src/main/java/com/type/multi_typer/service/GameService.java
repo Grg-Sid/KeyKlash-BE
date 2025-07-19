@@ -2,7 +2,6 @@ package com.type.multi_typer.service;
 
 import com.type.multi_typer.dto.GameMessage;
 import com.type.multi_typer.dto.MessageType;
-import com.type.multi_typer.dto.QuoteResponse;
 import com.type.multi_typer.dto.TypingUpdate;
 import com.type.multi_typer.model.GameState;
 import com.type.multi_typer.model.Player;
@@ -30,14 +29,21 @@ public class GameService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    public Room createRoom(int maxPlayer, String creatorName) {
+    public Room createRoom(String creatorName, String text) {
         String roomId = UUID.randomUUID().toString().substring(0, 6);
         String roomCode = generateRoomCode();
-        String text = generateRandomQuote();
 
-        Room room = new Room(roomId, roomCode, text, maxPlayer, creatorName);
+        Room room = new Room(roomId, roomCode, text, 6, creatorName);
         rooms.put(roomId, room);
         roomCodes.put(roomCode, roomId);
+        return room;
+    }
+
+    public Room restartRoom(String roomCode, String newText) {
+        Room room = rooms.get(roomCodes.get(roomCode));
+        room.setText(newText);
+        room.setGameState(GameState.IN_PROGRESS);
+        room.setGameStartedAt(LocalDateTime.now());
         return room;
     }
 
@@ -171,21 +177,6 @@ public class GameService {
         }
 
         return sb.toString();
-    }
-
-    public String generateRandomQuote() {
-        String quote = "Be Impeccable with Your Word. Speak with integrity. Say only what you mean. Avoid using the word to speak against yourself or to gossip about others. Use the power of your word in the direction of truth and love.";
-        String url = "https://api.quotable.kurokeita.dev/api/quotes/random?minLength=200&maxLength=400";
-        try {
-            QuoteResponse quoteResponse = restTemplate.getForObject(url, QuoteResponse.class);
-            if (quoteResponse == null) {
-                return quote;
-            }
-            quote = quoteResponse.getQuote().getContent();
-        } catch (Exception e) {
-            logger.error("Exception occurred while generating quote {}",quote, e);
-        }
-        return quote;
     }
 
     public void broadcastRoomUpdate(Room room) {

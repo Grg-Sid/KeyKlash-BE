@@ -4,8 +4,6 @@ public class TypingUpdate {
     private String roomId;
     private String playerId;
     private int currentPosition;
-    private int wpm;
-    private double accuracy;
 
     public TypingUpdate() {}
 
@@ -31,21 +29,5 @@ public class TypingUpdate {
 
     public void setCurrentPosition(int currentPosition) {
         this.currentPosition = currentPosition;
-    }
-
-    public int getWpm() {
-        return wpm;
-    }
-
-    public void setWpm(int wpm) {
-        this.wpm = wpm;
-    }
-
-    public double getAccuracy() {
-        return accuracy;
-    }
-
-    public void setAccuracy(double accuracy) {
-        this.accuracy = accuracy;
     }
 }
