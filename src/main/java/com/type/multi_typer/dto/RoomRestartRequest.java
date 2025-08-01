@@ -4,22 +4,22 @@ import jakarta.validation.constraints.NotBlank;
 
 public class RoomRestartRequest {
     @NotBlank
-    private String roomCode;
+    private String roomId;
     @NotBlank
     private String newText;
 
     public RoomRestartRequest() {}
 
-    public RoomRestartRequest(String roomCode, String newText) {
-        this.roomCode = roomCode;
+    public RoomRestartRequest(String roomId, String newText) {
+        this.roomId = roomId;
         this.newText = newText;
     }
 
-    public String getRoomCode() {
-        return roomCode;
+    public String getRoomId() {
+        return roomId;
     }
-    public void setRoomCode(String roomCode) {
-        this.roomCode = roomCode;
+    public void setRoomCode(String roomId) {
+        this.roomId = roomId;
     }
     public String getNewText() {
         return newText;

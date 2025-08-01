@@ -39,13 +39,16 @@ public class GameService {
         return room;
     }
 
-    public Room restartRoom(String roomCode, String newText) {
-        Room room = rooms.get(roomCodes.get(roomCode));
+    public Room resetRoom(String roomId, String newText) {
+        Room room = rooms.get(roomId);
         room.setText(newText);
         room.setGameState(GameState.IN_PROGRESS);
         room.setGameStartedAt(LocalDateTime.now());
+        room.getPlayers().forEach(player -> {player.setFinished(false);});
         return room;
     }
+
+
 
     public Player joinRoom(String roomCode, String nickname) {
         logger.info("Joining room: {}, {}", roomCode, nickname);
@@ -124,44 +127,47 @@ public class GameService {
         }
     }
 
-    public void updatePlayerProgress(String roomId, String playerId, TypingUpdate typingUpdate) {
-//        TODO: might add locks in future
-        //            TODO: Implement redis/db
+    public boolean updatePlayerProgress(String roomId, String playerId, TypingUpdate typingUpdate) {
         Room room = rooms.get(roomId);
         if (room == null || room.getPlayers().isEmpty() || room.getGameState() != GameState.IN_PROGRESS) {
             logger.warn("Room {} is not in progress", roomId);
+            return false;
         }
 
-        assert room != null;
         Player player = room.getPlayer(playerId);
 
         if (player == null) {
             logger.warn("Player with id {} not found", playerId);
-            return;
+            return false;
         }
 
-        if (typingUpdate.getWpm() > 300) {
-            logger.warn("Player {} has submitted unusually high WPM: {}", playerId, typingUpdate.getWpm());
-            player.setWpm(300);
-        } else {
-            player.setWpm(typingUpdate.getWpm());
-        }
+        int currentPosition = typingUpdate.getCurrentPosition();
+        boolean justFinished = false;
 
-        if (typingUpdate.getAccuracy() < 0 || typingUpdate.getAccuracy() > 100) {
-            logger.warn("Player {} has submitted invalid accuracy: {}", playerId, typingUpdate.getAccuracy());
-            player.setAccuracy(100);
-        } else {
-            player.setAccuracy(typingUpdate.getAccuracy());
-        }
-
-        if (typingUpdate.getCurrentPosition() < 0 || typingUpdate.getCurrentPosition() > room.getText().length()) {
-            logger.warn("Player {} has submitted invalid position: {}", playerId, typingUpdate.getCurrentPosition());
+        if (currentPosition < 0) {
+            logger.warn("Player {} submitted invalid position: {}", playerId, currentPosition);
             player.setCurrentPosition(room.getText().length());
+        } else if (currentPosition >= room.getText().length()) {
+            player.setCurrentPosition(room.getText().length());
+            if (!player.isFinished()) {
+                player.setFinished(true);
+                justFinished = true;
+            }
         } else {
-            player.setCurrentPosition(typingUpdate.getCurrentPosition());
+            player.setCurrentPosition(currentPosition);
         }
 
-        return;
+        return justFinished;
+    }
+
+
+    public boolean hasAllPlayerFinished(String roomId) {
+        Room room = rooms.get(roomId);
+        if (room == null || room.getPlayers().isEmpty()) {
+            return false;
+        }
+
+        return room.getPlayers().stream().allMatch(Player::isFinished);
     }
 
     public List<Room> getAllRooms() {

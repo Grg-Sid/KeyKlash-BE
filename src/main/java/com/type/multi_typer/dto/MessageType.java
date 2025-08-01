@@ -6,6 +6,7 @@ public enum MessageType {
     PLAYER_PROGRESS,
     GAME_OVER,
     GAME_STARTED,
+    GAME_RESTART,
     TYPING_UPDATE,
     PLAYER_FINISHED,
     ROOM_UPDATE,

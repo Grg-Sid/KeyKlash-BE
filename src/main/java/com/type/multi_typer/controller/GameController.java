@@ -50,9 +50,9 @@ public class GameController {
     @PostMapping("/room/restart")
     public ResponseEntity<Room> restartRoom(@RequestBody RoomRestartRequest request) {
         try {
-            String roomCode = request.getRoomCode();
+            String roomId = request.getRoomId();
             String newText = request.getNewText();
-            Room room = gameService.restartRoom(roomCode, newText);
+            Room room = gameService.resetRoom(roomId, newText);
             return ResponseEntity.ok(room);
         } catch (Exception e) {
             logger.error("Error restarting room", e);
