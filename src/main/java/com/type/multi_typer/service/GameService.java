@@ -6,61 +6,75 @@ import com.type.multi_typer.dto.TypingUpdate;
 import com.type.multi_typer.model.GameState;
 import com.type.multi_typer.model.Player;
 import com.type.multi_typer.model.Room;
+import com.type.multi_typer.repository.RoomRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class GameService {
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final Map<String, Room> rooms = new ConcurrentHashMap<>();
-    private final Map<String, String> roomCodes = new ConcurrentHashMap<>();
-    private final Random random = new Random();
-
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
+    private final RoomRepository roomRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final Random random = new Random();
 
+    public GameService(RoomRepository roomRepository, RedisTemplate<String, Object> redisTemplate, SimpMessagingTemplate messagingTemplate) {
+        this.roomRepository = roomRepository;
+        this.redisTemplate = redisTemplate;
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    @Transactional
     public Room createRoom(String creatorName, String text) {
         String roomId = UUID.randomUUID().toString().substring(0, 6);
         String roomCode = generateRoomCode();
 
         Room room = new Room(roomId, roomCode, text, 6, creatorName);
-        rooms.put(roomId, room);
-        roomCodes.put(roomCode, roomId);
-        return room;
+        logger.info("Creating new room with code {}", roomCode);
+        return roomRepository.save(room);
     }
 
-    public Room resetRoom(String roomId, String newText) {
-        Room room = rooms.get(roomId);
+    @Transactional
+    public void resetRoom(String roomId, String newText) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new IllegalArgumentException("Room not found for reset: " + roomId));
+
         room.setText(newText);
         room.setGameState(GameState.IN_PROGRESS);
         room.setGameStartedAt(LocalDateTime.now());
-        room.getPlayers().forEach(player -> {player.setFinished(false);});
-        return room;
+        room.getPlayers().forEach(player -> {
+            player.setFinished(false);
+            player.setCurrentPosition(0);});
+        room.updateActivity();
+        roomRepository.save(room);
+        logger.info("Room {} has been reset", roomId);
+
+        GameMessage restartMessage = new GameMessage(
+                MessageType.GAME_RESTART,
+                room,
+                room.getId(),
+                room.getCreatedBy().getId()
+        );
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, restartMessage);
     }
 
-
-
+    @Transactional
     public Player joinRoom(String roomCode, String nickname) {
-        logger.info("Joining room: {}, {}", roomCode, nickname);
-        String roomId = roomCodes.get(roomCode.toUpperCase());
-        if (roomId == null) {
-            throw new IllegalArgumentException("Room code " + roomCode + " not found");
-        }
+        Room room = roomRepository.findRoomByCode(roomCode.toUpperCase())
+                .orElseThrow(() -> new IllegalArgumentException("Room not found"));
 
-        Room room = rooms.get(roomId);
-        if (room == null) {
-            throw new IllegalArgumentException("Room code " + roomCode + " not found");
-        }
+        logger.info("Joining room: {}, {}", roomCode, nickname);
+
         if (room.isFull()) {
             throw new IllegalArgumentException("Room code " + roomCode + " is already full");
         }
@@ -68,111 +82,123 @@ public class GameService {
             throw new IllegalArgumentException("Room code " + roomCode + " is already in progress");
         }
 
-        Player newPlayer = new Player(nickname, roomId);
+        Player newPlayer = new Player(nickname);
         room.addPlayer(newPlayer);
-
+        roomRepository.save(room);
         broadcastRoomUpdate(room);
         return newPlayer;
     }
 
-    public void playerReady(String roomCode, String playerId) {
-        Room room = rooms.get(roomCode);
-        if (room == null) {
-            throw new IllegalArgumentException("Room code " + roomCode + " not found");
+    @Transactional
+    public void leaveRoom(String roomId, String playerId) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+        if (room != null) {
+            Player player = room.getPlayer(playerId);
+            if (player != null) {
+                room.removePlayer(player);
+                logger.info("Player {} left room {}", playerId, roomId);
+
+                if (room.getPlayers().isEmpty()) {
+                    logger.info("Room {} is empty, deleting.", roomId);
+                } else {
+                    room.updateActivity();
+                    roomRepository.save(room);
+                    broadcastRoomUpdate(room);
+                }
+            }
         }
 
-        Player player = room.getPlayer(playerId);
-        if (player == null) {
-            throw new IllegalArgumentException("Player ID " + playerId + " not found");
-        }
-
-        player.setReady(true);
-
-        // Check if all players are ready
-        if (room.getPlayers().stream().allMatch(Player::getReady)) {
-            startGame(room.getId());
-        }
     }
 
     public Room getRoom(String roomId) {
-        return rooms.get(roomId);
+        return roomRepository.findById(roomId).orElse(null);
     }
 
     public Room getRoomByCode(String roomCode) {
-        String roomId = roomCodes.get(roomCode.toUpperCase());
-        return roomId != null ? rooms.get(roomId) : null;
+        return roomRepository.findRoomByCode(roomCode.toUpperCase()).orElseThrow(() -> new IllegalArgumentException("Room not found"));
     }
 
-    public void leaveRoom(String roomId, String playerId) {
-        Room room = rooms.get(roomId);
+    public void updatePlayerProgressInCache(TypingUpdate typingUpdate) {
+        String roomId = typingUpdate.getRoomId();
+        String playerId = typingUpdate.getPlayerId();
+        int position = typingUpdate.getCurrentPosition();
+
+        String redisKey = "game_progress:" + roomId;
+        redisTemplate.opsForHash().put(redisKey, playerId, position);
+        redisTemplate.expire(redisKey, 1, TimeUnit.HOURS);
+    }
+
+    @Transactional
+    public void persistPlayerFinished(String roomId, String playerId) {
+        Room room = roomRepository.findById(roomId).orElse(null);
         if (room != null) {
-            room.removePlayer(playerId);
-
-            if (room.getPlayers().isEmpty()) {
-                rooms.remove(roomId);
-                roomCodes.remove(room.getCode());
+            Player player = room.getPlayer(playerId);
+            if (player != null && !player.isFinished()) {
+                player.setFinished(true);
+                room.updateActivity();
+                roomRepository.save(room);
+                logger.info("Player {} finished room {}", playerId, roomId);
+                GameMessage finishMessage = new GameMessage(
+                        MessageType.PLAYER_FINISHED,
+                        player,
+                        roomId,
+                        playerId
+                );
+                messagingTemplate.convertAndSend("/topic/room/" + roomId, finishMessage);
             }
-
-            broadcastRoomUpdate(room);
         }
     }
 
+    @Transactional
     public void startGame(String roomId) {
-        Room room = rooms.get(roomId);
-        if (room != null && room.canStart()) {
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new IllegalArgumentException("Room not found"));
+        if (room.canStart()) {
             room.setGameState(GameState.IN_PROGRESS);
             room.setGameStartedAt(LocalDateTime.now());
-            GameMessage message = new GameMessage(MessageType.GAME_STARTED, room, room.getId(), null);
-            messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
-        }
-    }
-
-    public boolean updatePlayerProgress(String roomId, String playerId, TypingUpdate typingUpdate) {
-        Room room = rooms.get(roomId);
-        if (room == null || room.getPlayers().isEmpty() || room.getGameState() != GameState.IN_PROGRESS) {
-            logger.warn("Room {} is not in progress", roomId);
-            return false;
-        }
-
-        Player player = room.getPlayer(playerId);
-
-        if (player == null) {
-            logger.warn("Player with id {} not found", playerId);
-            return false;
-        }
-
-        int currentPosition = typingUpdate.getCurrentPosition();
-        boolean justFinished = false;
-
-        if (currentPosition < 0) {
-            logger.warn("Player {} submitted invalid position: {}", playerId, currentPosition);
-            player.setCurrentPosition(room.getText().length());
-        } else if (currentPosition >= room.getText().length()) {
-            player.setCurrentPosition(room.getText().length());
-            if (!player.isFinished()) {
-                player.setFinished(true);
-                justFinished = true;
-            }
+            room.updateActivity();
+            roomRepository.save(room);
+            logger.info("Room {} has been started", roomId);
+//            GameMessage message = new GameMessage(
+//                    MessageType.GAME_STARTED,
+//                    room,
+//                    room.getId(),
+//                    null);
+//            messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
         } else {
-            player.setCurrentPosition(currentPosition);
+            logger.warn("Could not start game in room {}", roomId);
         }
-
-        return justFinished;
     }
 
+    @Transactional
+    public void gameOver(String roomId) {
+        Room room = roomRepository.findById(roomId).orElse(null);
+        if (room != null) {
+            room.setGameState(GameState.FINISHED);
+            room.setGameEndedAt(LocalDateTime.now());
+            room.updateActivity();
+            roomRepository.save(room);
+            logger.info("Room {} has been finished", roomId);
+            GameMessage gameOverMessage = new GameMessage(
+                    MessageType.GAME_OVER,
+                    room,
+                    roomId,
+                    null
+            );
+            messagingTemplate.convertAndSend("/topic/room/" + roomId, gameOverMessage);
+        }
+    }
 
+    @Transactional(readOnly = true)
     public boolean hasAllPlayerFinished(String roomId) {
-        Room room = rooms.get(roomId);
+        Room room = roomRepository.findById(roomId).orElse(null);
         if (room == null || room.getPlayers().isEmpty()) {
+            System.out.println("Get Player is Empty");
             return false;
         }
 
         return room.getPlayers().stream().allMatch(Player::isFinished);
     }
 
-    public List<Room> getAllRooms() {
-        return new ArrayList<>(rooms.values());
-    }
 
     private String generateRoomCode() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789";
@@ -191,5 +217,20 @@ public class GameService {
         GameMessage message = new GameMessage(MessageType.ROOM_UPDATE, room, room.getId(), null);
         messagingTemplate.convertAndSend("/topic/room/" + room.getId(), message);
         logger.info("Broadcast update for room {}", room.getId());
+    }
+
+    @Scheduled(fixedRate = 1800000)
+    @Transactional
+    public void cleanupInactiveRooms() {
+        logger.info("Cleaning up inactive rooms");
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(1);
+        List<Room> inactiveRooms = roomRepository.findByLastActivityAtBefore(cutoff);
+
+        if (!inactiveRooms.isEmpty()) {
+            logger.info("Cleaning up inactive rooms {}", inactiveRooms.size());
+            roomRepository.deleteAll(inactiveRooms);
+        } else {
+            logger.info("No inactive rooms found");
+        }
     }
 }

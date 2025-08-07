@@ -1,21 +1,27 @@
 package com.type.multi_typer.model;
 
-import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
+
 import java.util.UUID;
 
+@Entity
+@Table(name = "players")
 public class Player {
+    @Id
     private String id;
     private String nickname;
-    private String roomId;
     private int currentPosition;
     private String typedString;
     private int wpm;
     private double accuracy;
     private boolean ready;
     private boolean finished;
-    private LocalDateTime joinedAt;
-    private LocalDateTime finishedAt;
-    private String sessionId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "room_id")
+    @JsonIgnore
+    private Room room;
 
     private String generatePlayerId() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -23,17 +29,16 @@ public class Player {
 
     public Player() {}
 
-    public Player(String nickname, String roomId) {
+    public Player(String nickname) {
         this.id = this.generatePlayerId();
         this.nickname = nickname;
-        this.roomId = roomId;
-        this.currentPosition = 0;
-        this.wpm = 0;
-        this.accuracy = 0.0;
-        this.finished = false;
-        this.joinedAt = LocalDateTime.now();
-        this.ready = false;
-        this.typedString = "";
+//        TODO
+//        this.currentPosition = 0;
+//        this.wpm = 0;
+//        this.accuracy = 0.0;
+//        this.finished = false;
+//        this.ready = false;
+//        this.typedString = "";
     }
 
     public String getId() {
@@ -50,14 +55,6 @@ public class Player {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
-    }
-
-    public String getRoomId() {
-        return roomId;
-    }
-
-    public void setRoomId(String roomId) {
-        this.roomId = roomId;
     }
 
     public int getCurrentPosition() {
@@ -92,28 +89,12 @@ public class Player {
         this.finished = finished;
     }
 
-    public LocalDateTime getJoinedAt() {
-        return joinedAt;
+    public Room getRoom() {
+        return room;
     }
 
-    public void setJoinedAt(LocalDateTime joinedAt) {
-        this.joinedAt = joinedAt;
-    }
-
-    public LocalDateTime getFinishedAt() {
-        return finishedAt;
-    }
-
-    public void setFinishedAt(LocalDateTime finishedAt) {
-        this.finishedAt = finishedAt;
-    }
-
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
+    public void setRoom(Room room) {
+        this.room = room;
     }
 
     public boolean getReady() {

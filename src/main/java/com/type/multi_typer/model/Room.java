@@ -1,20 +1,33 @@
 package com.type.multi_typer.model;
 
+import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-
+@Entity
+@Table(name = "rooms")
 public class Room {
+    @Id
     private String id;
     private String code;
+    @Enumerated(EnumType.STRING)
     private GameState gameState;
+    @Column(length = 2000)
     private String text;
+
+    @OneToOne(cascade = CascadeType.ALL)
     private Player createdBy;
+    @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
     private List<Player> players;
+
     private LocalDateTime createdAt;
     private LocalDateTime gameStartedAt;
     private LocalDateTime gameEndedAt;
+
+    private LocalDateTime lastActivityAt;
+
     private int maxPlayers;
 
 
@@ -29,17 +42,27 @@ public class Room {
         this.gameState = GameState.WAITING;
         this.players = new ArrayList<>();
         this.createdAt = LocalDateTime.now();
+        this.lastActivityAt = LocalDateTime.now();
         this.maxPlayers = maxPlayers;
-        this.createdBy = new Player(creatorName, id);
+        this.createdBy = new Player(creatorName);
+        this.createdBy.setRoom(this);
         addPlayer(this.createdBy);
+    }
+
+    public void updateActivity() {
+        this.lastActivityAt = LocalDateTime.now();
     }
 
     public void addPlayer(Player player) {
         this.players.add(player);
+        player.setRoom(this);
+        updateActivity();
     }
 
-    public void removePlayer(String playerId) {
-        this.players.removeIf(player -> player.getId().equals(playerId));
+    public void removePlayer(Player player) {
+        players.remove(player);
+        player.setRoom(null);
+        updateActivity();
     }
 
     public Player getPlayer(String playerId) {
@@ -47,6 +70,14 @@ public class Room {
                 .filter(player -> player.getId().equals(playerId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    public LocalDateTime getLastActivityAt() {
+        return lastActivityAt;
+    }
+
+    public void setLastActivityAt(LocalDateTime lastActivityAt) {
+        this.lastActivityAt = lastActivityAt;
     }
 
     public boolean isFull() {

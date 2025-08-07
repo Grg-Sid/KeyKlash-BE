@@ -15,11 +15,7 @@ import org.springframework.stereotype.Controller;
 
 @Controller
 public class GameWebSocketController {
-
-    private static final Logger log = LoggerFactory.getLogger(GameWebSocketController.class);
-
     private final SimpMessagingTemplate messagingTemplate;
-
     private final GameService gameService;
 
     public GameWebSocketController(SimpMessagingTemplate simpMessagingTemplate, GameService gameService) {
@@ -29,11 +25,7 @@ public class GameWebSocketController {
 
     @MessageMapping("/game/progress")
     public void handleTypingUpdate(@Payload TypingUpdate typingUpdate) {
-        boolean isFinished = gameService.updatePlayerProgress(
-                typingUpdate.getRoomId(),
-                typingUpdate.getPlayerId(),
-                typingUpdate
-        );
+        gameService.updatePlayerProgressInCache(typingUpdate);
 
         GameMessage progressMessage = new GameMessage(
                 MessageType.PLAYER_PROGRESS,
@@ -43,23 +35,12 @@ public class GameWebSocketController {
         );
         messagingTemplate.convertAndSend("/topic/room/" + typingUpdate.getRoomId(), progressMessage);
 
-        if (isFinished) {
-            GameMessage finishMessage = new GameMessage(
-                    MessageType.PLAYER_FINISHED,
-                    typingUpdate,
-                    typingUpdate.getRoomId(),
-                    typingUpdate.getPlayerId()
-            );
-            messagingTemplate.convertAndSend("/topic/room/" + typingUpdate.getRoomId(), finishMessage);
+        Room room = gameService.getRoom(typingUpdate.getRoomId());
 
+        if (room != null && typingUpdate.getCurrentPosition() >= room.getText().length()) {
+            gameService.persistPlayerFinished(typingUpdate.getRoomId(), typingUpdate.getPlayerId());
             if (gameService.hasAllPlayerFinished(typingUpdate.getRoomId())) {
-                GameMessage gameOverMessage = new GameMessage(
-                        MessageType.GAME_OVER,
-                        null,
-                        typingUpdate.getRoomId(),
-                        typingUpdate.getPlayerId()
-                );
-                messagingTemplate.convertAndSend("/topic/room/" + typingUpdate.getRoomId(), gameOverMessage);
+                gameService.gameOver(typingUpdate.getRoomId());
             }
         }
     }
@@ -69,14 +50,6 @@ public class GameWebSocketController {
         String roomId = roomRestartRequest.getRoomId();
         if (gameService.hasAllPlayerFinished(roomId)) {
             gameService.resetRoom(roomId, roomRestartRequest.getNewText());
-            Room updatedRoom = gameService.getRoom(roomId);
-            GameMessage restartMessage = new GameMessage(
-            MessageType.GAME_RESTART,
-                    updatedRoom,
-                    updatedRoom.getId(),
-                    updatedRoom.getCreatedBy().getId()
-            );
-            messagingTemplate.convertAndSend("/topic/room/" + roomId, restartMessage);
         }
     }
 
