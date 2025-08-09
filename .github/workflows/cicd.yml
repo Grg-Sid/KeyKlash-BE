@@ -1,0 +1,72 @@
+name: Deploy KeyKlash Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Authenticate with GCP using a service account key
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Install gcloud CLI
+      - name: Install gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Verify authentication
+      - name: Verify gcloud authentication
+        run: gcloud auth list
+
+      # Configure Docker to use gcloud
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      # Build and push Docker image (tagged with commit SHA + latest)
+      - name: Build and Push Docker image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          IMAGE_BASE=us-central1-docker.pkg.dev/$GCP_PROJECT_ID/keyklash/keyklash-be
+          docker build -t $IMAGE_BASE:latest -t $IMAGE_BASE:$COMMIT_SHA .
+          docker push $IMAGE_BASE:latest
+          docker push $IMAGE_BASE:$COMMIT_SHA
+
+      # Deploy to Cloud Run using the "latest" tag
+      - name: Deploy to Cloud Run
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          CLOUD_RUN_SERVICE: keyklash-be
+          REGION: us-central1
+        run: |
+          IMAGE_URI=us-central1-docker.pkg.dev/$GCP_PROJECT_ID/keyklash/keyklash-be:latest
+          gcloud run deploy $CLOUD_RUN_SERVICE \
+            --image $IMAGE_URI \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated
+
+      # Cleanup old images (keep last 10)
+      - name: Cleanup old images
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          REPO_PATH=us-central1-docker.pkg.dev/$GCP_PROJECT_ID/keyklash/keyklash-be
+          gcloud artifacts docker images list $REPO_PATH \
+            --format="get(IMAGE)" \
+            --sort-by=~CREATE_TIME \
+            --limit=50 | tail -n +11 | while read IMAGE; do
+              gcloud artifacts docker images delete "$IMAGE" --quiet --delete-tags
+            done
