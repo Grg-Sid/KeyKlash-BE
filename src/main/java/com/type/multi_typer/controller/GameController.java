@@ -25,6 +25,11 @@ public class GameController {
         this.gameService = gameService;
     }
 
+    @GetMapping("/status")
+    public ResponseEntity<String> getStatus() {
+        return ResponseEntity.ok("Running");
+    }
+
 
     @PostMapping("/room/create")
     public ResponseEntity<Room> createRoom(@RequestBody RoomCreateRequest request) {
