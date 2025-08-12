@@ -34,6 +34,12 @@ public class GameController {
     @PostMapping("/room/create")
     public ResponseEntity<Room> createRoom(@RequestBody RoomCreateRequest request) {
         try {
+            String text = request.getText();
+            if (text == null || text.isEmpty()) {
+                logger.error("Text Can't be null or empty");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+
             Room room = gameService.createRoom(request.getCreatorName(), request.getText());
             return ResponseEntity.ok(room);
         } catch (Exception e) {
