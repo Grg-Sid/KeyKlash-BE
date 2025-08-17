@@ -32,13 +32,6 @@ public class Player {
     public Player(String nickname) {
         this.id = this.generatePlayerId();
         this.nickname = nickname;
-//        TODO
-//        this.currentPosition = 0;
-//        this.wpm = 0;
-//        this.accuracy = 0.0;
-//        this.finished = false;
-//        this.ready = false;
-//        this.typedString = "";
     }
 
     public String getId() {

@@ -68,7 +68,7 @@ public class GameController {
             logger.error("Exception occurred while joining room", e);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IllegalStateException e) {
-            logger.warn("Exception occurred while joining room", e);
+            logger.error("Exception occurred while joining room", e);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(null);
         }
     }
@@ -83,6 +83,7 @@ public class GameController {
     public ResponseEntity<Room> getRoom(@PathVariable String roomCode) {
         Room room = gameService.getRoomByCode(roomCode);
         if (room == null) {
+            logger.error("Room not found");
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(room);
@@ -94,6 +95,7 @@ public class GameController {
             gameService.startGame(roomId);
             return ResponseEntity.ok(gameService.getRoom(roomId));
         } catch (Exception e) {
+            logger.error("Error starting room", e);
             return ResponseEntity.badRequest().build();
         }
     }

@@ -39,7 +39,7 @@ public class GameService {
         String roomId = UUID.randomUUID().toString().substring(0, 6);
         String roomCode = generateRoomCode();
 
-        Room room = new Room(roomId, roomCode, text, 6, creatorName);
+        Room room = new Room(roomId, roomCode, text, 10, creatorName);
         logger.info("Creating new room with code {}", roomCode);
         return roomRepository.save(room);
     }
